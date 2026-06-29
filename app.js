@@ -19,8 +19,21 @@ function deleteTodo(id) {
   render();
 }
 
+function formatDate(date) {
+  const y = date.getFullYear();
+  const M = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${M}-${d} ${h}:${m}`;
+}
+
 function toggleTodo(id) {
-  todos = todos.map(t => t.id === id ? { ...t, completed: !t.completed } : t);
+  todos = todos.map(t => {
+    if (t.id !== id) return t;
+    const completed = !t.completed;
+    return { ...t, completed, completedAt: completed ? new Date() : null };
+  });
   render();
 }
 
@@ -49,9 +62,20 @@ function render() {
     checkbox.checked = todo.completed;
     checkbox.addEventListener('change', () => toggleTodo(todo.id));
 
+    const info = document.createElement('div');
+    info.className = 'todo-info';
+
     const span = document.createElement('span');
     span.className = 'todo-text';
     span.textContent = todo.text;
+    info.appendChild(span);
+
+    if (todo.completed && todo.completedAt) {
+      const time = document.createElement('span');
+      time.className = 'completion-time';
+      time.textContent = formatDate(new Date(todo.completedAt));
+      info.appendChild(time);
+    }
 
     const delBtn = document.createElement('button');
     delBtn.className = 'delete-btn';
@@ -59,7 +83,7 @@ function render() {
     delBtn.setAttribute('aria-label', '삭제');
     delBtn.addEventListener('click', () => deleteTodo(todo.id));
 
-    li.append(checkbox, span, delBtn);
+    li.append(checkbox, info, delBtn);
     list.appendChild(li);
   });
 

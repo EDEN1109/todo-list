@@ -15,15 +15,27 @@
 
     <section class="input-section">
       <form class="input-form" id="todo-form">
-        <input
-          type="text"
-          class="todo-input"
-          id="todo-input"
-          placeholder="할 일을 입력하세요..."
-          autocomplete="off"
-          maxlength="100"
-        />
-        <button type="submit" class="add-btn">추가</button>
+        <div class="input-row">
+          <input
+            type="text"
+            class="todo-input"
+            id="todo-input"
+            placeholder="할 일을 입력하세요..."
+            autocomplete="off"
+            maxlength="100"
+          />
+          <button type="submit" class="add-btn">추가</button>
+        </div>
+        <div class="input-extras">
+          <button type="button" class="desc-toggle-btn" id="desc-toggle-btn">+ 설명 추가</button>
+        </div>
+        <textarea
+          class="desc-input"
+          id="desc-input"
+          placeholder="설명을 입력하세요... (선택사항)"
+          maxlength="300"
+          rows="2"
+        ></textarea>
       </form>
     </section>
 

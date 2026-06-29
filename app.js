@@ -1,21 +1,25 @@
 let todos = [];
 let currentFilter = 'all';
+let expandedDescriptions = new Set();
 
 const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
+const descToggleBtn = document.getElementById('desc-toggle-btn');
+const descInput = document.getElementById('desc-input');
 const list = document.getElementById('todo-list');
 const emptyState = document.getElementById('empty-state');
 const countText = document.getElementById('count-text');
 const clearBtn = document.getElementById('clear-btn');
 const filterBtns = document.querySelectorAll('.filter-btn');
 
-function addTodo(text) {
-  todos.push({ id: Date.now(), text, completed: false });
+function addTodo(text, description = '') {
+  todos.push({ id: Date.now(), text, description, completed: false, completedAt: null });
   render();
 }
 
 function deleteTodo(id) {
   todos = todos.filter(t => t.id !== id);
+  expandedDescriptions.delete(id);
   render();
 }
 
@@ -38,6 +42,7 @@ function toggleTodo(id) {
 }
 
 function clearCompleted() {
+  todos.filter(t => t.completed).forEach(t => expandedDescriptions.delete(t.id));
   todos = todos.filter(t => !t.completed);
   render();
 }
@@ -65,16 +70,47 @@ function render() {
     const info = document.createElement('div');
     info.className = 'todo-info';
 
+    const textRow = document.createElement('div');
+    textRow.className = 'todo-text-row';
+
     const span = document.createElement('span');
     span.className = 'todo-text';
     span.textContent = todo.text;
-    info.appendChild(span);
+    textRow.appendChild(span);
+
+    if (todo.description) {
+      const expandBtn = document.createElement('button');
+      expandBtn.type = 'button';
+      expandBtn.className = 'desc-expand-btn';
+      const isExpanded = expandedDescriptions.has(todo.id);
+      expandBtn.textContent = isExpanded ? '▲' : '▼';
+      expandBtn.title = isExpanded ? '설명 접기' : '설명 보기';
+      expandBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (expandedDescriptions.has(todo.id)) {
+          expandedDescriptions.delete(todo.id);
+        } else {
+          expandedDescriptions.add(todo.id);
+        }
+        render();
+      });
+      textRow.appendChild(expandBtn);
+    }
+
+    info.appendChild(textRow);
 
     if (todo.completed && todo.completedAt) {
       const time = document.createElement('span');
       time.className = 'completion-time';
       time.textContent = formatDate(new Date(todo.completedAt));
       info.appendChild(time);
+    }
+
+    if (todo.description && expandedDescriptions.has(todo.id)) {
+      const desc = document.createElement('p');
+      desc.className = 'todo-description';
+      desc.textContent = todo.description;
+      info.appendChild(desc);
     }
 
     const delBtn = document.createElement('button');
@@ -94,12 +130,22 @@ function render() {
   emptyState.classList.toggle('visible', isEmpty);
 }
 
+descToggleBtn.addEventListener('click', () => {
+  const isVisible = descInput.classList.toggle('visible');
+  descToggleBtn.textContent = isVisible ? '- 설명 취소' : '+ 설명 추가';
+  if (!isVisible) descInput.value = '';
+});
+
 form.addEventListener('submit', e => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text) return;
-  addTodo(text);
+  const description = descInput.value.trim();
+  addTodo(text, description);
   input.value = '';
+  descInput.value = '';
+  descInput.classList.remove('visible');
+  descToggleBtn.textContent = '+ 설명 추가';
 });
 
 clearBtn.addEventListener('click', clearCompleted);

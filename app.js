@@ -12,20 +12,37 @@ const groupAddForm = document.getElementById('group-add-form');
 const groupNameInput = document.getElementById('group-name-input');
 const groupConfirmBtn = document.getElementById('group-confirm-btn');
 const groupChips = document.getElementById('group-chips');
+const groupSelect = document.getElementById('group-select');
 const list = document.getElementById('todo-list');
 const emptyState = document.getElementById('empty-state');
 const countText = document.getElementById('count-text');
 const clearBtn = document.getElementById('clear-btn');
 const filterBtns = document.querySelectorAll('.filter-btn');
 
+function syncGroupSelect() {
+  const current = groupSelect.value;
+  groupSelect.innerHTML = '<option value="">그룹 없음</option>';
+  groups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    groupSelect.appendChild(opt);
+  });
+  groupSelect.value = groups.find(g => String(g.id) === current) ? current : '';
+}
+
 function addGroup(name) {
   groups.push({ id: Date.now(), name });
   renderGroups();
+  syncGroupSelect();
 }
 
 function deleteGroup(id) {
   groups = groups.filter(g => g.id !== id);
+  todos = todos.map(t => t.groupId === id ? { ...t, groupId: null } : t);
   renderGroups();
+  syncGroupSelect();
+  render();
 }
 
 function renderGroups() {
@@ -50,8 +67,8 @@ function renderGroups() {
   });
 }
 
-function addTodo(text, description = '') {
-  todos.push({ id: Date.now(), text, description, completed: false, completedAt: null });
+function addTodo(text, description = '', groupId = null) {
+  todos.push({ id: Date.now(), text, description, groupId, completed: false, completedAt: null });
   render();
 }
 
@@ -137,6 +154,16 @@ function render() {
 
     info.appendChild(textRow);
 
+    if (todo.groupId) {
+      const group = groups.find(g => g.id === todo.groupId);
+      if (group) {
+        const badge = document.createElement('span');
+        badge.className = 'group-badge';
+        badge.textContent = group.name;
+        textRow.appendChild(badge);
+      }
+    }
+
     if (todo.completed && todo.completedAt) {
       const time = document.createElement('span');
       time.className = 'completion-time';
@@ -198,11 +225,13 @@ form.addEventListener('submit', e => {
   const text = input.value.trim();
   if (!text) return;
   const description = descInput.value.trim();
-  addTodo(text, description);
+  const groupId = groupSelect.value ? Number(groupSelect.value) : null;
+  addTodo(text, description, groupId);
   input.value = '';
   descInput.value = '';
   descInput.classList.remove('visible');
   descToggleBtn.textContent = '+ 설명 추가';
+  groupSelect.value = '';
 });
 
 clearBtn.addEventListener('click', clearCompleted);

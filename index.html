@@ -13,6 +13,18 @@
       <p class="subtitle">오늘 할 일을 정리해보세요</p>
     </header>
 
+    <section class="group-mgmt-section" id="group-mgmt-section">
+      <div class="group-mgmt-header">
+        <span class="group-mgmt-title">그룹</span>
+        <button class="group-add-toggle-btn" id="group-add-toggle-btn">+ 추가</button>
+      </div>
+      <div class="group-add-form hidden" id="group-add-form">
+        <input type="text" class="group-name-input" id="group-name-input" placeholder="그룹 이름..." maxlength="20" autocomplete="off"/>
+        <button type="button" class="group-confirm-btn" id="group-confirm-btn">확인</button>
+      </div>
+      <div class="group-chips" id="group-chips"></div>
+    </section>
+
     <section class="input-section">
       <form class="input-form" id="todo-form">
         <div class="input-row">

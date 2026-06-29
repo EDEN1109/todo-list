@@ -1,4 +1,5 @@
 let todos = [];
+let groups = [];
 let currentFilter = 'all';
 let expandedDescriptions = new Set();
 
@@ -6,11 +7,48 @@ const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
 const descToggleBtn = document.getElementById('desc-toggle-btn');
 const descInput = document.getElementById('desc-input');
+const groupAddToggleBtn = document.getElementById('group-add-toggle-btn');
+const groupAddForm = document.getElementById('group-add-form');
+const groupNameInput = document.getElementById('group-name-input');
+const groupConfirmBtn = document.getElementById('group-confirm-btn');
+const groupChips = document.getElementById('group-chips');
 const list = document.getElementById('todo-list');
 const emptyState = document.getElementById('empty-state');
 const countText = document.getElementById('count-text');
 const clearBtn = document.getElementById('clear-btn');
 const filterBtns = document.querySelectorAll('.filter-btn');
+
+function addGroup(name) {
+  groups.push({ id: Date.now(), name });
+  renderGroups();
+}
+
+function deleteGroup(id) {
+  groups = groups.filter(g => g.id !== id);
+  renderGroups();
+}
+
+function renderGroups() {
+  groupChips.innerHTML = '';
+  groups.forEach(group => {
+    const chip = document.createElement('div');
+    chip.className = 'group-chip';
+
+    const label = document.createElement('span');
+    label.className = 'group-chip-label';
+    label.textContent = group.name;
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'group-chip-del';
+    delBtn.textContent = '×';
+    delBtn.title = '그룹 삭제';
+    delBtn.addEventListener('click', () => deleteGroup(group.id));
+
+    chip.append(label, delBtn);
+    groupChips.appendChild(chip);
+  });
+}
 
 function addTodo(text, description = '') {
   todos.push({ id: Date.now(), text, description, completed: false, completedAt: null });
@@ -129,6 +167,25 @@ function render() {
   const isEmpty = filtered.length === 0;
   emptyState.classList.toggle('visible', isEmpty);
 }
+
+groupAddToggleBtn.addEventListener('click', () => {
+  const isHidden = groupAddForm.classList.toggle('hidden');
+  groupAddToggleBtn.textContent = isHidden ? '+ 추가' : '- 취소';
+  if (!isHidden) groupNameInput.focus();
+  else groupNameInput.value = '';
+});
+
+function submitGroup() {
+  const name = groupNameInput.value.trim();
+  if (!name) return;
+  addGroup(name);
+  groupNameInput.value = '';
+  groupAddForm.classList.add('hidden');
+  groupAddToggleBtn.textContent = '+ 추가';
+}
+
+groupConfirmBtn.addEventListener('click', submitGroup);
+groupNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitGroup(); } });
 
 descToggleBtn.addEventListener('click', () => {
   const isVisible = descInput.classList.toggle('visible');

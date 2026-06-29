@@ -1,21 +1,85 @@
 let todos = [];
+let groups = [];
 let currentFilter = 'all';
+let currentGroup = 'all';
+let expandedDescriptions = new Set();
 
 const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
+const descToggleBtn = document.getElementById('desc-toggle-btn');
+const descInput = document.getElementById('desc-input');
+const groupAddToggleBtn = document.getElementById('group-add-toggle-btn');
+const groupAddForm = document.getElementById('group-add-form');
+const groupNameInput = document.getElementById('group-name-input');
+const groupConfirmBtn = document.getElementById('group-confirm-btn');
+const groupChips = document.getElementById('group-chips');
+const groupSelect = document.getElementById('group-select');
+const groupFilter = document.getElementById('group-filter');
 const list = document.getElementById('todo-list');
 const emptyState = document.getElementById('empty-state');
 const countText = document.getElementById('count-text');
 const clearBtn = document.getElementById('clear-btn');
-const filterBtns = document.querySelectorAll('.filter-btn');
+const filterBtns = document.querySelectorAll('.status-filter .filter-btn');
 
-function addTodo(text) {
-  todos.push({ id: Date.now(), text, completed: false });
+function syncGroupSelect() {
+  const current = groupSelect.value;
+  groupSelect.innerHTML = '<option value="">그룹 없음</option>';
+  groups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    groupSelect.appendChild(opt);
+  });
+  groupSelect.value = groups.find(g => String(g.id) === current) ? current : '';
+}
+
+function addGroup(name) {
+  groups.push({ id: Date.now(), name });
+  renderGroups();
+  renderGroupFilter();
+  syncGroupSelect();
+}
+
+function deleteGroup(id) {
+  groups = groups.filter(g => g.id !== id);
+  todos = todos.map(t => t.groupId === id ? { ...t, groupId: null } : t);
+  if (String(currentGroup) === String(id)) currentGroup = 'all';
+  renderGroups();
+  renderGroupFilter();
+  syncGroupSelect();
+  render();
+}
+
+function renderGroups() {
+  groupChips.innerHTML = '';
+  groups.forEach(group => {
+    const chip = document.createElement('div');
+    chip.className = 'group-chip';
+
+    const label = document.createElement('span');
+    label.className = 'group-chip-label';
+    label.textContent = group.name;
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'group-chip-del';
+    delBtn.textContent = '×';
+    delBtn.title = '그룹 삭제';
+    delBtn.addEventListener('click', () => deleteGroup(group.id));
+
+    chip.append(label, delBtn);
+    groupChips.appendChild(chip);
+  });
+}
+
+function addTodo(text, description = '', groupId = null) {
+  todos.push({ id: Date.now(), text, description, groupId, completed: false, completedAt: null });
   render();
 }
 
 function deleteTodo(id) {
   todos = todos.filter(t => t.id !== id);
+  expandedDescriptions.delete(id);
   render();
 }
 
@@ -38,14 +102,49 @@ function toggleTodo(id) {
 }
 
 function clearCompleted() {
+  todos.filter(t => t.completed).forEach(t => expandedDescriptions.delete(t.id));
   todos = todos.filter(t => !t.completed);
   render();
 }
 
 function getFiltered() {
-  if (currentFilter === 'active') return todos.filter(t => !t.completed);
-  if (currentFilter === 'completed') return todos.filter(t => t.completed);
-  return todos;
+  let result = todos;
+
+  if (currentGroup !== 'all') {
+    result = result.filter(t => String(t.groupId) === String(currentGroup));
+  } else {
+    // 'all' shows every todo regardless of group
+  }
+
+  if (currentFilter === 'active') result = result.filter(t => !t.completed);
+  if (currentFilter === 'completed') result = result.filter(t => t.completed);
+  return result;
+}
+
+function renderGroupFilter() {
+  groupFilter.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = `group-filter-btn${currentGroup === 'all' ? ' active' : ''}`;
+  allBtn.dataset.group = 'all';
+  allBtn.textContent = '전체';
+  allBtn.addEventListener('click', () => setGroupFilter('all'));
+  groupFilter.appendChild(allBtn);
+
+  groups.forEach(g => {
+    const btn = document.createElement('button');
+    btn.className = `group-filter-btn${String(currentGroup) === String(g.id) ? ' active' : ''}`;
+    btn.dataset.group = g.id;
+    btn.textContent = g.name;
+    btn.addEventListener('click', () => setGroupFilter(g.id));
+    groupFilter.appendChild(btn);
+  });
+}
+
+function setGroupFilter(groupId) {
+  currentGroup = groupId;
+  renderGroupFilter();
+  render();
 }
 
 function render() {
@@ -65,16 +164,57 @@ function render() {
     const info = document.createElement('div');
     info.className = 'todo-info';
 
+    const textRow = document.createElement('div');
+    textRow.className = 'todo-text-row';
+
     const span = document.createElement('span');
     span.className = 'todo-text';
     span.textContent = todo.text;
-    info.appendChild(span);
+    textRow.appendChild(span);
+
+    if (todo.description) {
+      const expandBtn = document.createElement('button');
+      expandBtn.type = 'button';
+      expandBtn.className = 'desc-expand-btn';
+      const isExpanded = expandedDescriptions.has(todo.id);
+      expandBtn.textContent = isExpanded ? '▲' : '▼';
+      expandBtn.title = isExpanded ? '설명 접기' : '설명 보기';
+      expandBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (expandedDescriptions.has(todo.id)) {
+          expandedDescriptions.delete(todo.id);
+        } else {
+          expandedDescriptions.add(todo.id);
+        }
+        render();
+      });
+      textRow.appendChild(expandBtn);
+    }
+
+    info.appendChild(textRow);
+
+    if (todo.groupId) {
+      const group = groups.find(g => g.id === todo.groupId);
+      if (group) {
+        const badge = document.createElement('span');
+        badge.className = 'group-badge';
+        badge.textContent = group.name;
+        textRow.appendChild(badge);
+      }
+    }
 
     if (todo.completed && todo.completedAt) {
       const time = document.createElement('span');
       time.className = 'completion-time';
       time.textContent = formatDate(new Date(todo.completedAt));
       info.appendChild(time);
+    }
+
+    if (todo.description && expandedDescriptions.has(todo.id)) {
+      const desc = document.createElement('p');
+      desc.className = 'todo-description';
+      desc.textContent = todo.description;
+      info.appendChild(desc);
     }
 
     const delBtn = document.createElement('button');
@@ -94,12 +234,43 @@ function render() {
   emptyState.classList.toggle('visible', isEmpty);
 }
 
+groupAddToggleBtn.addEventListener('click', () => {
+  const isHidden = groupAddForm.classList.toggle('hidden');
+  groupAddToggleBtn.textContent = isHidden ? '+ 추가' : '- 취소';
+  if (!isHidden) groupNameInput.focus();
+  else groupNameInput.value = '';
+});
+
+function submitGroup() {
+  const name = groupNameInput.value.trim();
+  if (!name) return;
+  addGroup(name);
+  groupNameInput.value = '';
+  groupAddForm.classList.add('hidden');
+  groupAddToggleBtn.textContent = '+ 추가';
+}
+
+groupConfirmBtn.addEventListener('click', submitGroup);
+groupNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitGroup(); } });
+
+descToggleBtn.addEventListener('click', () => {
+  const isVisible = descInput.classList.toggle('visible');
+  descToggleBtn.textContent = isVisible ? '- 설명 취소' : '+ 설명 추가';
+  if (!isVisible) descInput.value = '';
+});
+
 form.addEventListener('submit', e => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text) return;
-  addTodo(text);
+  const description = descInput.value.trim();
+  const groupId = groupSelect.value ? Number(groupSelect.value) : null;
+  addTodo(text, description, groupId);
   input.value = '';
+  descInput.value = '';
+  descInput.classList.remove('visible');
+  descToggleBtn.textContent = '+ 설명 추가';
+  groupSelect.value = '';
 });
 
 clearBtn.addEventListener('click', clearCompleted);
@@ -113,4 +284,5 @@ filterBtns.forEach(btn => {
   });
 });
 
+renderGroupFilter();
 render();

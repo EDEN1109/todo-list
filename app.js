@@ -124,6 +124,11 @@ function getFiltered() {
 function renderGroupFilter() {
   groupFilter.innerHTML = '';
 
+  if (groups.length === 0) {
+    currentGroup = 'all';
+    return;
+  }
+
   const allBtn = document.createElement('button');
   allBtn.className = `group-filter-btn${currentGroup === 'all' ? ' active' : ''}`;
   allBtn.dataset.group = 'all';

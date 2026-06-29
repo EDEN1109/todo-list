@@ -1,6 +1,7 @@
 let todos = [];
 let groups = [];
 let currentFilter = 'all';
+let currentGroup = 'all';
 let expandedDescriptions = new Set();
 
 const form = document.getElementById('todo-form');
@@ -13,11 +14,12 @@ const groupNameInput = document.getElementById('group-name-input');
 const groupConfirmBtn = document.getElementById('group-confirm-btn');
 const groupChips = document.getElementById('group-chips');
 const groupSelect = document.getElementById('group-select');
+const groupFilter = document.getElementById('group-filter');
 const list = document.getElementById('todo-list');
 const emptyState = document.getElementById('empty-state');
 const countText = document.getElementById('count-text');
 const clearBtn = document.getElementById('clear-btn');
-const filterBtns = document.querySelectorAll('.filter-btn');
+const filterBtns = document.querySelectorAll('.status-filter .filter-btn');
 
 function syncGroupSelect() {
   const current = groupSelect.value;
@@ -34,13 +36,16 @@ function syncGroupSelect() {
 function addGroup(name) {
   groups.push({ id: Date.now(), name });
   renderGroups();
+  renderGroupFilter();
   syncGroupSelect();
 }
 
 function deleteGroup(id) {
   groups = groups.filter(g => g.id !== id);
   todos = todos.map(t => t.groupId === id ? { ...t, groupId: null } : t);
+  if (String(currentGroup) === String(id)) currentGroup = 'all';
   renderGroups();
+  renderGroupFilter();
   syncGroupSelect();
   render();
 }
@@ -103,9 +108,43 @@ function clearCompleted() {
 }
 
 function getFiltered() {
-  if (currentFilter === 'active') return todos.filter(t => !t.completed);
-  if (currentFilter === 'completed') return todos.filter(t => t.completed);
-  return todos;
+  let result = todos;
+
+  if (currentGroup !== 'all') {
+    result = result.filter(t => String(t.groupId) === String(currentGroup));
+  } else {
+    // 'all' shows every todo regardless of group
+  }
+
+  if (currentFilter === 'active') result = result.filter(t => !t.completed);
+  if (currentFilter === 'completed') result = result.filter(t => t.completed);
+  return result;
+}
+
+function renderGroupFilter() {
+  groupFilter.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = `group-filter-btn${currentGroup === 'all' ? ' active' : ''}`;
+  allBtn.dataset.group = 'all';
+  allBtn.textContent = '전체';
+  allBtn.addEventListener('click', () => setGroupFilter('all'));
+  groupFilter.appendChild(allBtn);
+
+  groups.forEach(g => {
+    const btn = document.createElement('button');
+    btn.className = `group-filter-btn${String(currentGroup) === String(g.id) ? ' active' : ''}`;
+    btn.dataset.group = g.id;
+    btn.textContent = g.name;
+    btn.addEventListener('click', () => setGroupFilter(g.id));
+    groupFilter.appendChild(btn);
+  });
+}
+
+function setGroupFilter(groupId) {
+  currentGroup = groupId;
+  renderGroupFilter();
+  render();
 }
 
 function render() {
@@ -245,4 +284,5 @@ filterBtns.forEach(btn => {
   });
 });
 
+renderGroupFilter();
 render();

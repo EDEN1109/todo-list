@@ -55,9 +55,14 @@
     </section>
 
     <section class="filter-section">
-      <button class="filter-btn active" data-filter="all">전체</button>
-      <button class="filter-btn" data-filter="active">진행 중</button>
-      <button class="filter-btn" data-filter="completed">완료</button>
+      <div class="group-filter" id="group-filter">
+        <button class="group-filter-btn active" data-group="all">전체</button>
+      </div>
+      <div class="status-filter">
+        <button class="filter-btn active" data-filter="all">전체</button>
+        <button class="filter-btn" data-filter="active">진행 중</button>
+        <button class="filter-btn" data-filter="completed">완료</button>
+      </div>
     </section>
 
     <section class="list-section">

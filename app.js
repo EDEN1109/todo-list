@@ -1,3 +1,5 @@
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
 let todos = [];
 let groups = [];
 let currentFilter = 'all';
@@ -33,14 +35,18 @@ function syncGroupSelect() {
   groupSelect.value = groups.find(g => String(g.id) === current) ? current : '';
 }
 
-function addGroup(name) {
-  groups.push({ id: Date.now(), name });
+async function addGroup(name) {
+  const { data, error } = await db.from('groups').insert({ name }).select().single();
+  if (error) { console.error(error); return; }
+  groups.push({ id: data.id, name: data.name });
   renderGroups();
   renderGroupFilter();
   syncGroupSelect();
 }
 
-function deleteGroup(id) {
+async function deleteGroup(id) {
+  const { error } = await db.from('groups').delete().eq('id', id);
+  if (error) { console.error(error); return; }
   groups = groups.filter(g => g.id !== id);
   todos = todos.map(t => t.groupId === id ? { ...t, groupId: null } : t);
   if (String(currentGroup) === String(id)) currentGroup = 'all';
@@ -72,12 +78,27 @@ function renderGroups() {
   });
 }
 
-function addTodo(text, description = '', groupId = null) {
-  todos.push({ id: Date.now(), text, description, groupId, completed: false, completedAt: null });
+async function addTodo(text, description = '', groupId = null) {
+  const { data, error } = await db
+    .from('todos')
+    .insert({ text, description, group_id: groupId, completed: false })
+    .select()
+    .single();
+  if (error) { console.error(error); return; }
+  todos.push({
+    id: data.id,
+    text: data.text,
+    description: data.description || '',
+    groupId: data.group_id,
+    completed: data.completed,
+    completedAt: null
+  });
   render();
 }
 
-function deleteTodo(id) {
+async function deleteTodo(id) {
+  const { error } = await db.from('todos').delete().eq('id', id);
+  if (error) { console.error(error); return; }
   todos = todos.filter(t => t.id !== id);
   expandedDescriptions.delete(id);
   render();
@@ -92,30 +113,38 @@ function formatDate(date) {
   return `${y}-${M}-${d} ${h}:${m}`;
 }
 
-function toggleTodo(id) {
+async function toggleTodo(id) {
+  const todo = todos.find(t => t.id === id);
+  if (!todo) return;
+  const completed = !todo.completed;
+  const completedAt = completed ? new Date().toISOString() : null;
+  const { error } = await db
+    .from('todos')
+    .update({ completed, completed_at: completedAt })
+    .eq('id', id);
+  if (error) { console.error(error); return; }
   todos = todos.map(t => {
     if (t.id !== id) return t;
-    const completed = !t.completed;
-    return { ...t, completed, completedAt: completed ? new Date() : null };
+    return { ...t, completed, completedAt: completedAt ? new Date(completedAt) : null };
   });
   render();
 }
 
-function clearCompleted() {
-  todos.filter(t => t.completed).forEach(t => expandedDescriptions.delete(t.id));
+async function clearCompleted() {
+  const completedIds = todos.filter(t => t.completed).map(t => t.id);
+  if (completedIds.length === 0) return;
+  const { error } = await db.from('todos').delete().in('id', completedIds);
+  if (error) { console.error(error); return; }
+  completedIds.forEach(id => expandedDescriptions.delete(id));
   todos = todos.filter(t => !t.completed);
   render();
 }
 
 function getFiltered() {
   let result = todos;
-
   if (currentGroup !== 'all') {
     result = result.filter(t => String(t.groupId) === String(currentGroup));
-  } else {
-    // 'all' shows every todo regardless of group
   }
-
   if (currentFilter === 'active') result = result.filter(t => !t.completed);
   if (currentFilter === 'completed') result = result.filter(t => t.completed);
   return result;
@@ -246,10 +275,10 @@ groupAddToggleBtn.addEventListener('click', () => {
   else groupNameInput.value = '';
 });
 
-function submitGroup() {
+async function submitGroup() {
   const name = groupNameInput.value.trim();
   if (!name) return;
-  addGroup(name);
+  await addGroup(name);
   groupNameInput.value = '';
   groupAddForm.classList.add('hidden');
   groupAddToggleBtn.textContent = '+ 추가';
@@ -264,13 +293,13 @@ descToggleBtn.addEventListener('click', () => {
   if (!isVisible) descInput.value = '';
 });
 
-form.addEventListener('submit', e => {
+form.addEventListener('submit', async e => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text) return;
   const description = descInput.value.trim();
-  const groupId = groupSelect.value ? Number(groupSelect.value) : null;
-  addTodo(text, description, groupId);
+  const groupId = groupSelect.value ? groupSelect.value : null;
+  await addTodo(text, description, groupId);
   input.value = '';
   descInput.value = '';
   descInput.classList.remove('visible');
@@ -289,5 +318,29 @@ filterBtns.forEach(btn => {
   });
 });
 
-renderGroupFilter();
-render();
+async function loadData() {
+  const [{ data: groupsData, error: groupsError }, { data: todosData, error: todosError }] = await Promise.all([
+    db.from('groups').select('*').order('created_at'),
+    db.from('todos').select('*').order('created_at')
+  ]);
+
+  if (groupsError) console.error(groupsError);
+  if (todosError) console.error(todosError);
+
+  groups = (groupsData || []).map(g => ({ id: g.id, name: g.name }));
+  todos = (todosData || []).map(t => ({
+    id: t.id,
+    text: t.text,
+    description: t.description || '',
+    groupId: t.group_id,
+    completed: t.completed,
+    completedAt: t.completed_at ? new Date(t.completed_at) : null
+  }));
+
+  renderGroups();
+  renderGroupFilter();
+  syncGroupSelect();
+  render();
+}
+
+loadData();

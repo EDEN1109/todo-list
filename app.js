@@ -5,7 +5,9 @@ let groups = [];
 let currentFilter = 'all';
 let currentGroup = 'all';
 let expandedDescriptions = new Set();
+let currentUser = null;
 
+// DOM refs - App
 const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
 const descToggleBtn = document.getElementById('desc-toggle-btn');
@@ -22,6 +24,110 @@ const emptyState = document.getElementById('empty-state');
 const countText = document.getElementById('count-text');
 const clearBtn = document.getElementById('clear-btn');
 const filterBtns = document.querySelectorAll('.status-filter .filter-btn');
+
+// DOM refs - Auth
+const authOverlay = document.getElementById('auth-overlay');
+const appContainer = document.querySelector('.container');
+const authForm = document.getElementById('auth-form');
+const authEmailInput = document.getElementById('auth-email');
+const authPasswordInput = document.getElementById('auth-password');
+const authSubmitBtn = document.getElementById('auth-submit-btn');
+const authMessage = document.getElementById('auth-message');
+const tabLogin = document.getElementById('tab-login');
+const tabSignup = document.getElementById('tab-signup');
+const userEmailEl = document.getElementById('user-email');
+const logoutBtn = document.getElementById('logout-btn');
+
+let authMode = 'login';
+
+// ── Auth helpers ──────────────────────────────────────────────
+
+function showAuth() {
+  currentUser = null;
+  todos = [];
+  groups = [];
+  currentFilter = 'all';
+  currentGroup = 'all';
+  expandedDescriptions.clear();
+  authOverlay.classList.remove('hidden');
+  appContainer.classList.add('hidden');
+}
+
+function showApp(user) {
+  const isNewUser = !currentUser || currentUser.id !== user.id;
+  currentUser = user;
+  userEmailEl.textContent = user.email;
+  authOverlay.classList.add('hidden');
+  appContainer.classList.remove('hidden');
+  if (isNewUser) {
+    currentFilter = 'all';
+    currentGroup = 'all';
+    loadData();
+  }
+}
+
+function getAuthErrorMessage(msg) {
+  if (msg.includes('Invalid login credentials')) return '이메일 또는 비밀번호가 올바르지 않습니다.';
+  if (msg.includes('User already registered')) return '이미 가입된 이메일입니다.';
+  if (msg.includes('Email not confirmed')) return '이메일 인증이 완료되지 않았습니다. 받은 편지함을 확인해주세요.';
+  if (msg.includes('Password should be at least')) return '비밀번호는 6자 이상이어야 합니다.';
+  if (msg.includes('Unable to validate email address')) return '유효하지 않은 이메일 형식입니다.';
+  return msg;
+}
+
+// ── Auth event listeners ──────────────────────────────────────
+
+tabLogin.addEventListener('click', () => {
+  authMode = 'login';
+  tabLogin.classList.add('active');
+  tabSignup.classList.remove('active');
+  authSubmitBtn.textContent = '로그인';
+  authMessage.textContent = '';
+  authMessage.className = 'auth-message';
+});
+
+tabSignup.addEventListener('click', () => {
+  authMode = 'signup';
+  tabSignup.classList.add('active');
+  tabLogin.classList.remove('active');
+  authSubmitBtn.textContent = '회원가입';
+  authMessage.textContent = '';
+  authMessage.className = 'auth-message';
+});
+
+authForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = authEmailInput.value.trim();
+  const password = authPasswordInput.value;
+  authMessage.textContent = '';
+  authMessage.className = 'auth-message';
+  authSubmitBtn.disabled = true;
+
+  if (authMode === 'login') {
+    const { error } = await db.auth.signInWithPassword({ email, password });
+    if (error) {
+      authMessage.textContent = getAuthErrorMessage(error.message);
+      authMessage.classList.add('auth-message--error');
+    }
+  } else {
+    const { error } = await db.auth.signUp({ email, password });
+    if (error) {
+      authMessage.textContent = getAuthErrorMessage(error.message);
+      authMessage.classList.add('auth-message--error');
+    } else {
+      authMessage.textContent = '인증 이메일을 보냈습니다. 받은 편지함을 확인하고 링크를 클릭해주세요.';
+      authMessage.classList.add('auth-message--success');
+      authForm.reset();
+    }
+  }
+  authSubmitBtn.disabled = false;
+});
+
+logoutBtn.addEventListener('click', async () => {
+  await db.auth.signOut();
+});
+
+// ── Todo & Group logic ────────────────────────────────────────
 
 function syncGroupSelect() {
   const current = groupSelect.value;
@@ -319,6 +425,14 @@ filterBtns.forEach(btn => {
 });
 
 async function loadData() {
+  todos = [];
+  groups = [];
+  expandedDescriptions.clear();
+  renderGroups();
+  renderGroupFilter();
+  syncGroupSelect();
+  render();
+
   const [{ data: groupsData, error: groupsError }, { data: todosData, error: todosError }] = await Promise.all([
     db.from('groups').select('*').order('created_at'),
     db.from('todos').select('*').order('created_at')
@@ -343,4 +457,13 @@ async function loadData() {
   render();
 }
 
-loadData();
+// ── Auth state ────────────────────────────────────────────────
+
+db.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+    if (session) showApp(session.user);
+    else showAuth();
+  } else if (event === 'SIGNED_OUT') {
+    showAuth();
+  }
+});

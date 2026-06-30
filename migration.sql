@@ -1,9 +1,14 @@
 -- =============================================
--- TODO List - Supabase DB 생성 스크립트
--- Supabase Dashboard > SQL Editor에서 실행
+-- Migration: user_id 컬럼 추가 + RLS 정책 교체
+-- 기존 DB에서 실행 (Supabase Dashboard > SQL Editor)
+-- 주의: 기존 데이터가 모두 삭제됩니다
 -- =============================================
 
--- 1. groups 테이블
+-- 기존 테이블 제거 후 재생성
+DROP TABLE IF EXISTS todos;
+DROP TABLE IF EXISTS groups;
+
+-- groups 테이블
 CREATE TABLE groups (
   id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -11,7 +16,7 @@ CREATE TABLE groups (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. todos 테이블
+-- todos 테이블
 CREATE TABLE todos (
   id           UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   text         TEXT NOT NULL,
@@ -23,11 +28,11 @@ CREATE TABLE todos (
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Row Level Security 활성화
+-- Row Level Security 활성화
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE todos  ENABLE ROW LEVEL SECURITY;
 
--- 4. 사용자별 데이터 격리 정책 (본인 데이터만 접근 가능)
+-- 사용자별 데이터 격리 정책
 CREATE POLICY "user isolation" ON groups
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 

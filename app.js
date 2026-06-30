@@ -1,3 +1,10 @@
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+)
+
 let todos = [];
 let groups = [];
 let currentFilter = 'all';
@@ -21,6 +28,17 @@ const countText = document.getElementById('count-text');
 const clearBtn = document.getElementById('clear-btn');
 const filterBtns = document.querySelectorAll('.status-filter .filter-btn');
 
+function mapTodo(row) {
+  return {
+    id: row.id,
+    text: row.text,
+    description: row.description || '',
+    groupId: row.group_id,
+    completed: row.completed,
+    completedAt: row.completed_at ? new Date(row.completed_at) : null,
+  };
+}
+
 function syncGroupSelect() {
   const current = groupSelect.value;
   groupSelect.innerHTML = '<option value="">그룹 없음</option>';
@@ -33,14 +51,23 @@ function syncGroupSelect() {
   groupSelect.value = groups.find(g => String(g.id) === current) ? current : '';
 }
 
-function addGroup(name) {
-  groups.push({ id: Date.now(), name });
+async function addGroup(name) {
+  const id = Date.now();
+  const { data, error } = await supabase
+    .from('groups')
+    .insert({ id, name })
+    .select()
+    .single();
+  if (error) { console.error(error); return; }
+  groups.push({ id: data.id, name: data.name });
   renderGroups();
   renderGroupFilter();
   syncGroupSelect();
 }
 
-function deleteGroup(id) {
+async function deleteGroup(id) {
+  const { error } = await supabase.from('groups').delete().eq('id', id);
+  if (error) { console.error(error); return; }
   groups = groups.filter(g => g.id !== id);
   todos = todos.map(t => t.groupId === id ? { ...t, groupId: null } : t);
   if (String(currentGroup) === String(id)) currentGroup = 'all';
@@ -72,12 +99,21 @@ function renderGroups() {
   });
 }
 
-function addTodo(text, description = '', groupId = null) {
-  todos.push({ id: Date.now(), text, description, groupId, completed: false, completedAt: null });
+async function addTodo(text, description = '', groupId = null) {
+  const id = Date.now();
+  const { data, error } = await supabase
+    .from('todos')
+    .insert({ id, text, description, group_id: groupId, completed: false, completed_at: null })
+    .select()
+    .single();
+  if (error) { console.error(error); return; }
+  todos.push(mapTodo(data));
   render();
 }
 
-function deleteTodo(id) {
+async function deleteTodo(id) {
+  const { error } = await supabase.from('todos').delete().eq('id', id);
+  if (error) { console.error(error); return; }
   todos = todos.filter(t => t.id !== id);
   expandedDescriptions.delete(id);
   render();
@@ -92,30 +128,40 @@ function formatDate(date) {
   return `${y}-${M}-${d} ${h}:${m}`;
 }
 
-function toggleTodo(id) {
+async function toggleTodo(id) {
+  const todo = todos.find(t => t.id === id);
+  if (!todo) return;
+  const completed = !todo.completed;
+  const completedAt = completed ? new Date().toISOString() : null;
+
+  const { error } = await supabase
+    .from('todos')
+    .update({ completed, completed_at: completedAt })
+    .eq('id', id);
+  if (error) { console.error(error); return; }
+
   todos = todos.map(t => {
     if (t.id !== id) return t;
-    const completed = !t.completed;
-    return { ...t, completed, completedAt: completed ? new Date() : null };
+    return { ...t, completed, completedAt: completedAt ? new Date(completedAt) : null };
   });
   render();
 }
 
-function clearCompleted() {
-  todos.filter(t => t.completed).forEach(t => expandedDescriptions.delete(t.id));
+async function clearCompleted() {
+  const completedIds = todos.filter(t => t.completed).map(t => t.id);
+  if (completedIds.length === 0) return;
+  const { error } = await supabase.from('todos').delete().in('id', completedIds);
+  if (error) { console.error(error); return; }
+  completedIds.forEach(id => expandedDescriptions.delete(id));
   todos = todos.filter(t => !t.completed);
   render();
 }
 
 function getFiltered() {
   let result = todos;
-
   if (currentGroup !== 'all') {
     result = result.filter(t => String(t.groupId) === String(currentGroup));
-  } else {
-    // 'all' shows every todo regardless of group
   }
-
   if (currentFilter === 'active') result = result.filter(t => !t.completed);
   if (currentFilter === 'completed') result = result.filter(t => t.completed);
   return result;
@@ -246,10 +292,10 @@ groupAddToggleBtn.addEventListener('click', () => {
   else groupNameInput.value = '';
 });
 
-function submitGroup() {
+async function submitGroup() {
   const name = groupNameInput.value.trim();
   if (!name) return;
-  addGroup(name);
+  await addGroup(name);
   groupNameInput.value = '';
   groupAddForm.classList.add('hidden');
   groupAddToggleBtn.textContent = '+ 추가';
@@ -264,18 +310,18 @@ descToggleBtn.addEventListener('click', () => {
   if (!isVisible) descInput.value = '';
 });
 
-form.addEventListener('submit', e => {
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text) return;
   const description = descInput.value.trim();
   const groupId = groupSelect.value ? Number(groupSelect.value) : null;
-  addTodo(text, description, groupId);
   input.value = '';
   descInput.value = '';
   descInput.classList.remove('visible');
   descToggleBtn.textContent = '+ 설명 추가';
   groupSelect.value = '';
+  await addTodo(text, description, groupId);
 });
 
 clearBtn.addEventListener('click', clearCompleted);
@@ -289,5 +335,22 @@ filterBtns.forEach(btn => {
   });
 });
 
-renderGroupFilter();
-render();
+async function init() {
+  const [{ data: groupRows, error: groupErr }, { data: todoRows, error: todoErr }] = await Promise.all([
+    supabase.from('groups').select('*').order('created_at'),
+    supabase.from('todos').select('*').order('created_at'),
+  ]);
+
+  if (groupErr) console.error('groups 로드 실패:', groupErr);
+  if (todoErr) console.error('todos 로드 실패:', todoErr);
+
+  groups = (groupRows || []).map(g => ({ id: g.id, name: g.name }));
+  todos = (todoRows || []).map(mapTodo);
+
+  renderGroups();
+  renderGroupFilter();
+  syncGroupSelect();
+  render();
+}
+
+init();

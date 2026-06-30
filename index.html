@@ -7,10 +7,40 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
+
+  <!-- 로그인 / 회원가입 화면 -->
+  <div id="auth-view" class="container">
     <header class="header">
       <h1 class="title">TODO List</h1>
-      <p class="subtitle">오늘 할 일을 정리해보세요</p>
+      <p class="subtitle">계정에 로그인하세요</p>
+    </header>
+    <div class="auth-body">
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login">로그인</button>
+        <button class="auth-tab" id="tab-signup">회원가입</button>
+      </div>
+      <form class="auth-form" id="auth-form">
+        <input type="email" id="auth-email" class="auth-input" placeholder="이메일" autocomplete="email" required />
+        <input type="password" id="auth-password" class="auth-input" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" required />
+        <p class="auth-error hidden" id="auth-error"></p>
+        <button type="submit" class="auth-submit" id="auth-submit">로그인</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 앱 본체 (로그인 후 표시) -->
+  <div id="app-view" class="container hidden">
+    <header class="header">
+      <div class="header-row">
+        <div>
+          <h1 class="title">TODO List</h1>
+          <p class="subtitle">오늘 할 일을 정리해보세요</p>
+        </div>
+        <div class="user-info">
+          <span class="user-email" id="user-email"></span>
+          <button class="logout-btn" id="logout-btn">로그아웃</button>
+        </div>
+      </div>
     </header>
 
     <section class="group-mgmt-section" id="group-mgmt-section">
@@ -66,9 +96,7 @@
     </section>
 
     <section class="list-section">
-      <ul class="todo-list" id="todo-list">
-        <!-- TODO 아이템이 여기에 렌더링됩니다 -->
-      </ul>
+      <ul class="todo-list" id="todo-list"></ul>
       <div class="empty-state" id="empty-state">
         <p>할 일이 없습니다. 새 항목을 추가해보세요!</p>
       </div>

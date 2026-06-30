@@ -5,12 +5,16 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 )
 
+// ── 상태 ──────────────────────────────────────────
 let todos = [];
 let groups = [];
 let currentFilter = 'all';
 let currentGroup = 'all';
 let expandedDescriptions = new Set();
+let currentUser = null;
+let authMode = 'login'; // 'login' | 'signup'
 
+// ── DOM 참조 (앱) ──────────────────────────────────
 const form = document.getElementById('todo-form');
 const input = document.getElementById('todo-input');
 const descToggleBtn = document.getElementById('desc-toggle-btn');
@@ -28,6 +32,104 @@ const countText = document.getElementById('count-text');
 const clearBtn = document.getElementById('clear-btn');
 const filterBtns = document.querySelectorAll('.status-filter .filter-btn');
 
+// ── DOM 참조 (인증) ────────────────────────────────
+const authView = document.getElementById('auth-view');
+const appView = document.getElementById('app-view');
+const authForm = document.getElementById('auth-form');
+const authEmail = document.getElementById('auth-email');
+const authPassword = document.getElementById('auth-password');
+const authError = document.getElementById('auth-error');
+const authSubmit = document.getElementById('auth-submit');
+const tabLogin = document.getElementById('tab-login');
+const tabSignup = document.getElementById('tab-signup');
+const logoutBtn = document.getElementById('logout-btn');
+const userEmailEl = document.getElementById('user-email');
+
+// ── 인증 UI 헬퍼 ───────────────────────────────────
+function showAuth() {
+  authView.classList.remove('hidden');
+  appView.classList.add('hidden');
+  authEmail.value = '';
+  authPassword.value = '';
+  authError.classList.add('hidden');
+  authError.textContent = '';
+}
+
+function showApp(user) {
+  authView.classList.add('hidden');
+  appView.classList.remove('hidden');
+  userEmailEl.textContent = user.email;
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  if (mode === 'login') {
+    tabLogin.classList.add('active');
+    tabSignup.classList.remove('active');
+    authSubmit.textContent = '로그인';
+  } else {
+    tabSignup.classList.add('active');
+    tabLogin.classList.remove('active');
+    authSubmit.textContent = '회원가입';
+  }
+  authError.classList.add('hidden');
+  authError.textContent = '';
+}
+
+function getAuthErrorMessage(error) {
+  const msg = error.message
+  if (msg.includes('Invalid login credentials')) return '이메일 또는 비밀번호가 올바르지 않습니다.'
+  if (msg.includes('User already registered')) return '이미 사용 중인 이메일입니다.'
+  if (msg.includes('Password should be at least')) return '비밀번호는 6자 이상이어야 합니다.'
+  if (msg.includes('Unable to validate email')) return '유효하지 않은 이메일 형식입니다.'
+  return msg
+}
+
+// ── 인증 이벤트 ────────────────────────────────────
+tabLogin.addEventListener('click', () => setAuthMode('login'));
+tabSignup.addEventListener('click', () => setAuthMode('signup'));
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+  authError.classList.add('hidden');
+  authSubmit.disabled = true;
+
+  let error;
+  if (authMode === 'login') {
+    ({ error } = await supabase.auth.signInWithPassword({ email, password }));
+  } else {
+    ({ error } = await supabase.auth.signUp({ email, password }));
+  }
+
+  authSubmit.disabled = false;
+  if (error) {
+    authError.textContent = getAuthErrorMessage(error);
+    authError.classList.remove('hidden');
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  await supabase.auth.signOut();
+});
+
+// ── 인증 상태 감지 ─────────────────────────────────
+supabase.auth.onAuthStateChange(async (event, session) => {
+  if (session) {
+    currentUser = session.user;
+    showApp(currentUser);
+    await init();
+  } else {
+    currentUser = null;
+    todos = [];
+    groups = [];
+    expandedDescriptions.clear();
+    showAuth();
+  }
+});
+
+// ── 데이터 매핑 ────────────────────────────────────
 function mapTodo(row) {
   return {
     id: row.id,
@@ -39,6 +141,7 @@ function mapTodo(row) {
   };
 }
 
+// ── 그룹 CRUD ──────────────────────────────────────
 function syncGroupSelect() {
   const current = groupSelect.value;
   groupSelect.innerHTML = '<option value="">그룹 없음</option>';
@@ -55,7 +158,7 @@ async function addGroup(name) {
   const id = Date.now();
   const { data, error } = await supabase
     .from('groups')
-    .insert({ id, name })
+    .insert({ id, name, user_id: currentUser.id })
     .select()
     .single();
   if (error) { console.error(error); return; }
@@ -99,11 +202,12 @@ function renderGroups() {
   });
 }
 
+// ── 투두 CRUD ──────────────────────────────────────
 async function addTodo(text, description = '', groupId = null) {
   const id = Date.now();
   const { data, error } = await supabase
     .from('todos')
-    .insert({ id, text, description, group_id: groupId, completed: false, completed_at: null })
+    .insert({ id, text, description, group_id: groupId, completed: false, completed_at: null, user_id: currentUser.id })
     .select()
     .single();
   if (error) { console.error(error); return; }
@@ -117,15 +221,6 @@ async function deleteTodo(id) {
   todos = todos.filter(t => t.id !== id);
   expandedDescriptions.delete(id);
   render();
-}
-
-function formatDate(date) {
-  const y = date.getFullYear();
-  const M = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const h = String(date.getHours()).padStart(2, '0');
-  const m = String(date.getMinutes()).padStart(2, '0');
-  return `${y}-${M}-${d} ${h}:${m}`;
 }
 
 async function toggleTodo(id) {
@@ -155,6 +250,16 @@ async function clearCompleted() {
   completedIds.forEach(id => expandedDescriptions.delete(id));
   todos = todos.filter(t => !t.completed);
   render();
+}
+
+// ── 렌더링 ─────────────────────────────────────────
+function formatDate(date) {
+  const y = date.getFullYear();
+  const M = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${M}-${d} ${h}:${m}`;
 }
 
 function getFiltered() {
@@ -285,6 +390,7 @@ function render() {
   emptyState.classList.toggle('visible', isEmpty);
 }
 
+// ── 앱 이벤트 ──────────────────────────────────────
 groupAddToggleBtn.addEventListener('click', () => {
   const isHidden = groupAddForm.classList.toggle('hidden');
   groupAddToggleBtn.textContent = isHidden ? '+ 추가' : '- 취소';
@@ -335,7 +441,12 @@ filterBtns.forEach(btn => {
   });
 });
 
+// ── 초기화 ─────────────────────────────────────────
 async function init() {
+  currentGroup = 'all';
+  currentFilter = 'all';
+  filterBtns.forEach((b, i) => b.classList.toggle('active', i === 0));
+
   const [{ data: groupRows, error: groupErr }, { data: todoRows, error: todoErr }] = await Promise.all([
     supabase.from('groups').select('*').order('created_at'),
     supabase.from('todos').select('*').order('created_at'),
@@ -352,5 +463,3 @@ async function init() {
   syncGroupSelect();
   render();
 }
-
-init();
